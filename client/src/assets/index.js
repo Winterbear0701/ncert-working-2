@@ -1,3 +1,5 @@
+// Import PDFs directly - Vite will handle them as assets
+// Using explicit imports to ensure proper bundling
 import lesson1 from "./fees101.pdf";
 import lesson2 from "./fees102.pdf";
 import lesson3 from "./fees103.pdf";
@@ -13,7 +15,7 @@ import lesson12 from "./fees112.pdf";
 import lesson13 from "./fees113.pdf";
 import lesson14 from "./fees114.pdf";
 
-export const lessons={
+export const lessons = {
   lesson1,
   lesson2,
   lesson3,

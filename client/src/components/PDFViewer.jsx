@@ -26,11 +26,49 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
   const [scale, setScale] = useState(1.2);
   const [dialogPosition, setDialogPosition] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [pdfError, setPdfError] = useState(null);
+  const [pdfData, setPdfData] = useState(null);
 
   const { setSelectedText, activePanel, setActivePanel } = useAnnotations();
 
+  // Load PDF as ArrayBuffer to avoid CORS and serving issues
+  useEffect(() => {
+    const loadPDF = async () => {
+      try {
+        const response = await fetch(pdfUrl);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const arrayBuffer = await response.arrayBuffer();
+        setPdfData({ data: arrayBuffer });
+        setPdfError(null);
+      } catch (error) {
+        console.error('Error loading PDF:', error);
+        setPdfError(error.message);
+        setPdfData(null);
+      }
+    };
+
+    if (pdfUrl) {
+      loadPDF();
+    }
+  }, [pdfUrl]);
+
+  // PDF loading options
+  const pdfOptions = {
+    cMapUrl: `//unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
+    cMapPacked: true,
+    standardFontDataUrl: `//unpkg.com/pdfjs-dist@${pdfjs.version}/standard_fonts/`,
+  };
+
   function onDocumentLoadSuccess({ numPages }) {
     setNumPages(numPages);
+    setPdfError(null);
+  }
+
+  function onDocumentLoadError(error) {
+    console.error('PDF load error:', error);
+    setPdfError(error.message || 'Failed to load PDF');
   }
 
   const handleTextSelection = (e) => {
@@ -176,28 +214,54 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
           onMouseUp={handleTextSelection}
         >
           <div className="relative">
-            <Document
-              file={pdfUrl}
-              onLoadSuccess={onDocumentLoadSuccess}
-              loading={
-                <div className="flex items-center justify-center h-[600px]">
-                  <div className="text-muted-foreground">Loading PDF...</div>
+            {pdfData ? (
+              <Document
+                file={pdfData}
+                onLoadSuccess={onDocumentLoadSuccess}
+                onLoadError={onDocumentLoadError}
+                options={pdfOptions}
+                loading={
+                  <div className="flex items-center justify-center h-[600px]">
+                    <div className="text-muted-foreground">Loading PDF...</div>
+                  </div>
+                }
+                error={
+                  <div className="flex flex-col items-center justify-center h-[600px] gap-4">
+                    <div className="text-destructive">Failed to load PDF</div>
+                    {pdfError && (
+                      <div className="text-sm text-muted-foreground max-w-md text-center">
+                        {pdfError}
+                      </div>
+                    )}
+                    <div className="text-sm text-muted-foreground">
+                      PDF URL: {pdfUrl}
+                    </div>
+                  </div>
+                }
+              >
+                <Page
+                  pageNumber={pageNumber}
+                  scale={scale}
+                  className="shadow-lg"
+                  renderTextLayer={true}
+                  renderAnnotationLayer={true}
+                />
+              </Document>
+            ) : pdfError ? (
+              <div className="flex flex-col items-center justify-center h-[600px] gap-4">
+                <div className="text-destructive">Failed to load PDF</div>
+                <div className="text-sm text-muted-foreground max-w-md text-center">
+                  {pdfError}
                 </div>
-              }
-              error={
-                <div className="flex items-center justify-center h-[600px]">
-                  <div className="text-destructive">Failed to load PDF</div>
+                <div className="text-sm text-muted-foreground">
+                  Attempted URL: {pdfUrl}
                 </div>
-              }
-            >
-              <Page
-                pageNumber={pageNumber}
-                scale={scale}
-                className="shadow-lg"
-                renderTextLayer={true}
-                renderAnnotationLayer={true}
-              />
-            </Document>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-[600px]">
+                <div className="text-muted-foreground">Loading PDF...</div>
+              </div>
+            )}
 
             {/* Highlight Overlay */}
             <HighlightOverlay
