@@ -29,7 +29,7 @@ GREETING_RESPONSES = {
 }
 
 # Similarity threshold for RAG results
-SIMILARITY_THRESHOLD = 0.4
+SIMILARITY_THRESHOLD = 0.3  # Lowered for better recall
 
 
 class RAGService:
@@ -67,7 +67,7 @@ class RAGService:
         subject: str,
         chapter: int,
         mode: str,
-        top_k: int = 5
+        top_k: int = 10  # Increased from 5 to 10 for better coverage
     ) -> tuple[str, list[str]]:
         """
         Query Pinecone with embeddings and generate answer using Gemini.
@@ -136,7 +136,10 @@ class RAGService:
             chunks = []
             for match in valid_matches:
                 if 'metadata' in match and 'text' in match['metadata']:
-                    chunks.append(match['metadata']['text'])
+                    text = match['metadata']['text']
+                    # Filter out junk chunks (page numbers, headers, etc.)
+                    if len(text) > 50 and not text.startswith('1000 m2000'):  # Skip pagination artifacts
+                        chunks.append(text)
             
             logger.info(f"Extracted {len(chunks)} text chunks from valid matches")
             
@@ -149,14 +152,15 @@ class RAGService:
             logger.info(f"Context length: {len(context)} chars, Preview: {context[:150]}...")
             
             # Step 8: Generate answer using Gemini
-            logger.info(f"Generating {mode} explanation using Gemini...")
+            logger.info(f"Generating {mode} explanation using Gemini for Class {class_level}...")
             logger.info(f"Context preview: {context[:200]}...")
             
             try:
                 answer = self.gemini.format_explanation(
                     context=context,
                     question=query_text,
-                    mode=mode
+                    mode=mode,
+                    class_level=class_level  # Pass class level for language adjustment
                 )
                 logger.info(f"✓ Gemini response received: {len(answer)} chars - '{answer[:100]}...'")
             except Exception as e:

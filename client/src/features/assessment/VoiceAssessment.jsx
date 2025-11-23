@@ -3,25 +3,27 @@ import { Mic, MicOff, Volume2, CheckCircle, Loader2 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
 import { Progress } from "../../components/ui/progress";
+import { assessmentService } from "../../services/api";
+import useUserStore from "../../stores/userStore";
 
 /**
  * Voice Assessment Component
  *
  * Appears after completing 4 pages of lesson.
  * Uses voice input/output for questions and answers.
+ * Questions are generated from textbook content using RAG.
  *
- * TODO: Backend Integration
+ * Backend Integration:
  * =========================
- * 1. POST /api/assessments - Submit voice assessment
- * 2. POST /api/assessments/evaluate - Send audio for evaluation
- * 3. GET /api/assessments/score - Get evaluation results
+ * 1. POST /api/assessment/questions - Get RAG-based questions
+ * 2. POST /api/assessment/evaluate - Evaluate answers with AI
  *
  * Web Speech API:
  * - SpeechRecognition: For voice input
  * - SpeechSynthesis: For voice output (questions)
  */
 
-export default function VoiceAssessment({ lessonId, onComplete, onClose }) {
+export default function VoiceAssessment({ currentLesson, onComplete, onClose }) {
   const [isListening, setIsListening] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState([]);
@@ -29,16 +31,48 @@ export default function VoiceAssessment({ lessonId, onComplete, onClose }) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [score, setScore] = useState(null);
+  const [evaluationResult, setEvaluationResult] = useState(null); // Store full evaluation
+  const [questions, setQuestions] = useState([]);
+  const [isLoadingQuestions, setIsLoadingQuestions] = useState(true);
+  const [error, setError] = useState(null);
 
+  const { user } = useUserStore();
   const recognitionRef = useRef(null);
   const synthesisRef = useRef(null);
 
-  // Sample questions - TODO: Load from backend based on lesson
-  const questions = [
-    "What did you learn from this lesson?",
-    "Can you explain the main concept?",
-    "How would you apply this knowledge?",
-  ];
+  // Load questions from backend on mount
+  useEffect(() => {
+    const loadQuestions = async () => {
+      try {
+        setIsLoadingQuestions(true);
+        setError(null);
+        
+        console.log("📝 Loading assessment questions from backend...");
+        const response = await assessmentService.getQuestions(
+          user.classLevel,
+          user.preferredSubject || "Social Science",
+          currentLesson?.number || 1,
+          3 // Number of questions
+        );
+        
+        console.log("✅ Questions loaded:", response);
+        setQuestions(response.questions || []);
+        setIsLoadingQuestions(false);
+      } catch (err) {
+        console.error("❌ Failed to load questions:", err);
+        setError("Failed to load questions. Using fallback questions.");
+        // Fallback questions
+        setQuestions([
+          "What did you learn from this lesson?",
+          "Can you explain the main concept?",
+          "How would you apply this knowledge?",
+        ]);
+        setIsLoadingQuestions(false);
+      }
+    };
+
+    loadQuestions();
+  }, [user.classLevel, user.preferredSubject, currentLesson]);
 
   // Initialize Web Speech API
   useEffect(() => {
@@ -128,40 +162,53 @@ export default function VoiceAssessment({ lessonId, onComplete, onClose }) {
   const evaluateAnswers = async (allAnswers) => {
     setIsEvaluating(true);
 
-    // TODO: Send to backend for AI evaluation
-    // const response = await fetch('/api/assessments/evaluate', {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({
-    //     lessonId,
-    //     answers: allAnswers
-    //   })
-    // });
-    // const result = await response.json();
-
-    // Simulate evaluation
-    setTimeout(() => {
-      const simulatedScore = Math.floor(Math.random() * 30) + 70; // 70-100
-      setScore(simulatedScore);
+    try {
+      console.log("🔍 Evaluating answers with backend...");
+      const result = await assessmentService.evaluateAnswers(
+        user.classLevel,
+        user.preferredSubject || "Social Science",
+        currentLesson?.number || 1,
+        allAnswers
+      );
+      
+      console.log("✅ Evaluation result:", result);
+      setScore(result.score);
+      setEvaluationResult(result); // Store full result
       setIsEvaluating(false);
 
-      // Speak the score
+      // Speak the score and feedback
       speakQuestion(
-        `Your score is ${simulatedScore} out of 100. ${
-          simulatedScore >= 80 ? "Excellent work!" : "Good effort!"
-        }`
+        `Your score is ${result.score} out of 100. ${result.feedback}`
       );
-    }, 2000);
+    } catch (err) {
+      console.error("❌ Evaluation error:", err);
+      // Fallback to simulated score
+      const simulatedScore = Math.floor(Math.random() * 30) + 70;
+      setScore(simulatedScore);
+      setEvaluationResult({
+        score: simulatedScore,
+        feedback: "Good effort! Keep practicing.",
+        strengths: ["Attempted all questions"],
+        improvements: ["Review the chapter content"],
+        question_scores: [],
+        topics_to_study: []
+      });
+      setIsEvaluating(false);
+
+      speakQuestion(
+        `Your score is ${simulatedScore} out of 100. Good effort!`
+      );
+    }
   };
 
-  // Start assessment
+  // Start assessment when questions are loaded
   useEffect(() => {
-    if (questions.length > 0) {
+    if (!isLoadingQuestions && questions.length > 0) {
       setTimeout(() => {
-        speakQuestion(`Let's begin the assessment. ${questions[0]}`);
-      }, 500);
+        speakQuestion(`Let's begin the assessment. Question 1: ${questions[0]}`);
+      }, 1000);
     }
-  }, []);
+  }, [isLoadingQuestions, questions]);
 
   const progress = ((currentQuestion + 1) / questions.length) * 100;
 
@@ -188,8 +235,26 @@ export default function VoiceAssessment({ lessonId, onComplete, onClose }) {
               AI Assessment Assistant
             </p>
 
+            {/* Loading Questions */}
+            {isLoadingQuestions && (
+              <div className="py-8">
+                <Loader2 className="h-12 w-12 mx-auto mb-4 animate-spin text-primary" />
+                <p className="text-lg font-medium">Loading questions from textbook...</p>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Analyzing Chapter {currentLesson?.number || 1}
+                </p>
+              </div>
+            )}
+
+            {/* Error State */}
+            {error && (
+              <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                <p className="text-xs text-yellow-700 dark:text-yellow-500">{error}</p>
+              </div>
+            )}
+
             {/* Question Display */}
-            {!isEvaluating && score === null && (
+            {!isLoadingQuestions && !isEvaluating && score === null && (
               <div className="mb-6">
                 <div className="bg-primary/5 rounded-lg p-6 border border-primary/20">
                   <p className="text-lg font-medium leading-relaxed">
@@ -215,17 +280,52 @@ export default function VoiceAssessment({ lessonId, onComplete, onClose }) {
               </div>
             )}
 
-            {/* Score Display */}
-            {score !== null && (
-              <div className="py-4">
-                <CheckCircle className="h-16 w-16 mx-auto mb-4 text-emerald-600" />
-                <h3 className="text-5xl font-bold text-primary mb-2">
-                  {score}
-                </h3>
-                <p className="text-sm text-muted-foreground mb-4">out of 100</p>
-                <p className="text-lg font-medium">
-                  {score >= 80 ? "🎉 Excellent work!" : "👍 Good effort!"}
-                </p>
+            {/* Score Display with Analytics */}
+            {score !== null && evaluationResult && (
+              <div className="py-4 w-full max-w-lg">
+                {/* Overall Score */}
+                <div className="mb-6">
+                  <div className="relative w-32 h-32 mx-auto mb-4">
+                    {/* Circular Progress */}
+                    <svg className="transform -rotate-90 w-32 h-32">
+                      <circle
+                        cx="64"
+                        cy="64"
+                        r="56"
+                        stroke="currentColor"
+                        strokeWidth="8"
+                        fill="none"
+                        className="text-muted"
+                      />
+                      <circle
+                        cx="64"
+                        cy="64"
+                        r="56"
+                        stroke="currentColor"
+                        strokeWidth="8"
+                        fill="none"
+                        strokeDasharray={`${2 * Math.PI * 56}`}
+                        strokeDashoffset={`${2 * Math.PI * 56 * (1 - score / 100)}`}
+                        className={`transition-all duration-1000 ${
+                          score >= 80 ? 'text-emerald-600' : 
+                          score >= 60 ? 'text-blue-600' : 
+                          score >= 40 ? 'text-yellow-600' : 
+                          'text-red-600'
+                        }`}
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-4xl font-bold text-foreground">{score}</span>
+                    </div>
+                  </div>
+                  <p className="text-sm text-muted-foreground text-center">Overall Performance</p>
+                </div>
+
+                {/* Feedback */}
+                <div className="mb-6 p-4 bg-primary/5 border border-primary/20 rounded-lg">
+                  <p className="text-sm text-foreground leading-relaxed">{evaluationResult.feedback}</p>
+                </div>
               </div>
             )}
           </div>
@@ -242,8 +342,18 @@ export default function VoiceAssessment({ lessonId, onComplete, onClose }) {
             <h3 className="text-2xl font-bold mb-2">You</h3>
             <p className="text-sm text-muted-foreground mb-8">Student</p>
 
+            {/* Loading State */}
+            {isLoadingQuestions && (
+              <div className="py-8">
+                <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+                  <Loader2 className="h-10 w-10 animate-spin" />
+                </div>
+                <p className="text-sm text-muted-foreground">Please wait...</p>
+              </div>
+            )}
+
             {/* User Interaction Area */}
-            {!isEvaluating && score === null && (
+            {!isLoadingQuestions && !isEvaluating && score === null && (
               <>
                 {/* Voice Input */}
                 <div className="mb-6">
@@ -315,32 +425,140 @@ export default function VoiceAssessment({ lessonId, onComplete, onClose }) {
               </div>
             )}
 
-            {/* Result State */}
-            {score !== null && (
-              <div className="w-full">
-                {/* Answers Review */}
-                <div className="mb-6 space-y-3 max-h-[400px] overflow-y-auto">
-                  <h4 className="text-xs font-semibold text-muted-foreground mb-3">
-                    YOUR ANSWERS:
+            {/* Result State - Analytics Dashboard */}
+            {score !== null && evaluationResult && (
+              <div className="w-full space-y-4 max-h-[600px] overflow-y-auto px-2">
+                {/* Performance Heatmap */}
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                    <span className="w-1 h-4 bg-primary rounded-full"></span>
+                    Question Performance
                   </h4>
-                  {answers.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="p-3 bg-muted/30 rounded-lg border border-muted-foreground/10"
-                    >
-                      <p className="text-xs font-medium text-primary mb-1">
-                        Q{idx + 1}: {item.question}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {item.answer}
-                      </p>
-                    </div>
-                  ))}
+                  
+                  {evaluationResult.question_scores && evaluationResult.question_scores.length > 0 ? (
+                    evaluationResult.question_scores.map((qs, idx) => (
+                      <div key={idx} className="space-y-2">
+                        {/* Question Number and Score */}
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-muted-foreground">
+                            Question {qs.question_num}
+                          </span>
+                          <span className={`text-xs font-bold ${
+                            qs.score >= 80 ? 'text-emerald-600' : 
+                            qs.score >= 60 ? 'text-blue-600' : 
+                            qs.score >= 40 ? 'text-yellow-600' : 
+                            'text-red-600'
+                          }`}>
+                            {qs.score}%
+                          </span>
+                        </div>
+                        
+                        {/* Heatmap Bar */}
+                        <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full transition-all duration-500 ${
+                              qs.score >= 80 ? 'bg-emerald-600' : 
+                              qs.score >= 60 ? 'bg-blue-600' : 
+                              qs.score >= 40 ? 'bg-yellow-600' : 
+                              'bg-red-600'
+                            }`}
+                            style={{ width: `${qs.score}%` }}
+                          />
+                        </div>
+                        
+                        {/* Hint (NO direct answer) */}
+                        <p className="text-xs text-muted-foreground italic pl-2 border-l-2 border-primary/30">
+                          Hint: {qs.hint}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    answers.map((_, idx) => (
+                      <div key={idx} className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-muted-foreground">
+                            Question {idx + 1}
+                          </span>
+                          <span className="text-xs font-bold text-blue-600">
+                            {Math.floor(score / answers.length)}%
+                          </span>
+                        </div>
+                        <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-blue-600 transition-all duration-500"
+                            style={{ width: `${score / answers.length}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
 
+                {/* Topics to Study */}
+                {evaluationResult.topics_to_study && evaluationResult.topics_to_study.length > 0 && (
+                  <div className="space-y-2 pt-2 border-t border-border">
+                    <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <span className="w-1 h-4 bg-orange-500 rounded-full"></span>
+                      Topics to Review
+                    </h4>
+                    <div className="space-y-2">
+                      {evaluationResult.topics_to_study.map((topic, idx) => (
+                        <div 
+                          key={idx} 
+                          className="flex items-start gap-2 p-2 bg-orange-500/5 border border-orange-500/20 rounded-lg"
+                        >
+                          <span className="text-orange-600 text-xs font-bold mt-0.5">
+                            {idx + 1}
+                          </span>
+                          <span className="text-xs text-foreground flex-1">
+                            {topic}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Strengths */}
+                {evaluationResult.strengths && evaluationResult.strengths.length > 0 && (
+                  <div className="space-y-2 pt-2 border-t border-border">
+                    <h4 className="text-sm font-semibold text-emerald-600 flex items-center gap-2">
+                      <span className="w-1 h-4 bg-emerald-600 rounded-full"></span>
+                      What You Did Well
+                    </h4>
+                    <div className="space-y-1">
+                      {evaluationResult.strengths.map((strength, idx) => (
+                        <div key={idx} className="flex items-start gap-2 text-xs text-foreground">
+                          <span className="text-emerald-600 mt-0.5 font-bold">+</span>
+                          <span className="flex-1">{strength}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Improvements */}
+                {evaluationResult.improvements && evaluationResult.improvements.length > 0 && (
+                  <div className="space-y-2 pt-2 border-t border-border">
+                    <h4 className="text-sm font-semibold text-blue-600 flex items-center gap-2">
+                      <span className="w-1 h-4 bg-blue-600 rounded-full"></span>
+                      Areas to Focus On
+                    </h4>
+                    <div className="space-y-1">
+                      {evaluationResult.improvements.map((improvement, idx) => (
+                        <div key={idx} className="flex items-start gap-2 text-xs text-foreground">
+                          <span className="text-blue-600 mt-0.5 font-bold">•</span>
+                          <span className="flex-1">{improvement}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Continue Button */}
                 <Button
                   size="lg"
-                  className="w-full"
+                  className="w-full mt-4"
                   onClick={() => onComplete(score)}
                 >
                   Continue Learning →

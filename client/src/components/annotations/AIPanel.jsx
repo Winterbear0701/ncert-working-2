@@ -1,84 +1,79 @@
 import React, { useState } from "react";
-import { Sparkles, Lightbulb, FileText, BookOpen } from "lucide-react";
+import { Sparkles, Lightbulb, FileText, BookOpen, MessageSquare } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "../ui/sheet";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { ScrollArea } from "../ui/scroll-area";
 import { useAnnotations } from "../../contexts/AnnotationContext";
+import { chatService } from "../../services/api";
 
 const AI_ACTIONS = [
   {
-    id: "simplify",
+    id: "simple",
     label: "Simplify",
     icon: Lightbulb,
     description: "Make it easier to understand",
     color: "text-blue-600",
   },
   {
-    id: "refine",
-    label: "Refine",
-    icon: Sparkles,
-    description: "Improve and enhance the text",
+    id: "meaning",
+    label: "Meaning",
+    icon: FileText,
+    description: "Get definitions and meanings",
     color: "text-purple-600",
   },
   {
-    id: "examples",
+    id: "example",
     label: "Examples",
     icon: BookOpen,
     description: "Provide practical examples",
     color: "text-green-600",
   },
   {
-    id: "explain",
-    label: "Explain",
-    icon: FileText,
-    description: "Detailed explanation",
+    id: "story",
+    label: "Story",
+    icon: MessageSquare,
+    description: "Explain as a story",
     color: "text-orange-600",
+  },
+  {
+    id: "summary",
+    label: "Summary",
+    icon: Sparkles,
+    description: "Get a concise summary",
+    color: "text-pink-600",
   },
 ];
 
 export default function AIPanel({ open, onClose, currentLesson, pageNumber }) {
-  const { selectedText, addAIAnnotation, updateAIResponse } = useAnnotations();
+  const { selectedText, addAIAnnotation } = useAnnotations();
   const [selectedAction, setSelectedAction] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [response, setResponse] = useState("");
+  const [error, setError] = useState(null);
 
   const handleActionSelect = async (action) => {
     setSelectedAction(action.id);
     setIsProcessing(true);
+    setError(null);
 
-    // Simulate AI processing (replace with actual AI API call)
-    setTimeout(() => {
-      let aiResponse = "";
+    try {
+      // Call real backend API
+      const result = await chatService.getExplanation({
+        class_level: 6, // Default to Class 6
+        subject: "Social Science",
+        chapter: currentLesson?.number || 1,
+        highlight_text: selectedText?.text || "",
+        mode: action.id,
+      });
 
-      switch (action.id) {
-        case "simplify":
-          aiResponse = `Simplified version:\n\n${
-            selectedText?.text || ""
-          }\n\nThis text explains the concept in simpler terms...`;
-          break;
-        case "refine":
-          aiResponse = `Refined version:\n\n${
-            selectedText?.text || ""
-          }\n\nEnhanced with better clarity and structure...`;
-          break;
-        case "examples":
-          aiResponse = `Examples:\n\n1. Example one related to: ${
-            selectedText?.text || ""
-          }\n2. Example two...\n3. Example three...`;
-          break;
-        case "explain":
-          aiResponse = `Detailed Explanation:\n\n${
-            selectedText?.text || ""
-          }\n\nThis concept works by...`;
-          break;
-        default:
-          aiResponse = "Processing...";
-      }
-
-      setResponse(aiResponse);
+      setResponse(result.answer);
       setIsProcessing(false);
-    }, 1500);
+    } catch (err) {
+      console.error("AI API Error:", err);
+      setError(err.message || "Failed to get AI response");
+      setIsProcessing(false);
+    }
   };
 
   const handleSave = () => {
@@ -175,22 +170,37 @@ export default function AIPanel({ open, onClose, currentLesson, pageNumber }) {
                 </Button>
               </div>
 
-              <div className="h-auto rounded-lg border bg-background p-4 ">
+              <div className="min-h-[300px] max-h-[500px] overflow-y-auto rounded-lg border bg-background p-4">
                 {isProcessing ? (
-                  <div className="flex items-center justify-center h-full">
+                  <div className="flex items-center justify-center h-full py-8">
                     <div className="text-center space-y-2">
                       <Sparkles className="h-8 w-8 animate-pulse text-violet-600 mx-auto" />
                       <p className="text-sm text-muted-foreground">
-                        Processing...
+                        AI is thinking...
                       </p>
                     </div>
                   </div>
-                ) : (
-                  <div className="prose prose-sm max-w-none">
-                    <pre className="whitespace-pre-wrap text-sm font-sans">
-                      {response}
-                    </pre>
+                ) : error ? (
+                  <div className="text-center space-y-2 py-8">
+                    <p className="text-sm text-red-600">Error: {error}</p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleActionSelect(
+                        AI_ACTIONS.find((a) => a.id === selectedAction)
+                      )}
+                    >
+                      Try Again
+                    </Button>
                   </div>
+                ) : (
+                  <ScrollArea className="h-full">
+                    <div className="prose prose-sm max-w-none pr-4">
+                      <div className="whitespace-pre-wrap text-sm leading-relaxed">
+                        {response}
+                      </div>
+                    </div>
+                  </ScrollArea>
                 )}
               </div>
 

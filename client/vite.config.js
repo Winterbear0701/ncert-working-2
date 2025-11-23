@@ -14,6 +14,13 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: false,
+    headers: {
+      // Add CORS headers for PDFs
+      'Access-Control-Allow-Origin': '*',
+      'Cross-Origin-Embedder-Policy': 'credentialless',
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Resource-Policy': 'cross-origin'
+    },
     fs: {
       // Allow serving files from project root
       allow: ['..']

@@ -1,9 +1,11 @@
 import { useState } from "react";
 import PDFViewer from "./features/pdf/PDFViewer";
 import LessonNavigation from "./features/lessons/LessonNavigation";
+import UserSettingsPanel from "./components/UserSettingsPanel";
 import { SAMPLE_LESSONS } from "./constants/lessons";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Settings } from "lucide-react";
 import { Button } from "./components/ui/button";
+import useUserStore from "./stores/userStore";
 import "./App.css";
 
 /**
@@ -24,6 +26,8 @@ import "./App.css";
 function App() {
   const [currentLesson, setCurrentLesson] = useState(SAMPLE_LESSONS[0]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const { user } = useUserStore();
 
   const handleLessonSelect = (lesson) => {
     setCurrentLesson(lesson);
@@ -85,6 +89,22 @@ function App() {
               </p>
             )}
           </div>
+
+          {/* User Settings Button */}
+          <div className="flex items-center gap-2">
+            <div className="text-right mr-2">
+              <p className="text-xs text-muted-foreground">Class {user.classLevel}</p>
+              <p className="text-xs font-medium">{user.preferredSubject}</p>
+            </div>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setSettingsOpen(true)}
+              className="hover:bg-primary/10"
+            >
+              <Settings className="h-5 w-5" />
+            </Button>
+          </div>
         </div>
 
         {/* PDF Viewer */}
@@ -95,6 +115,12 @@ function App() {
           />
         </div>
       </div>
+
+      {/* User Settings Panel */}
+      <UserSettingsPanel
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+      />
     </div>
   );
 }

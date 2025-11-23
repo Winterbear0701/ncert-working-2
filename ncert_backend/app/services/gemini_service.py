@@ -48,7 +48,8 @@ class GeminiService:
         self, 
         context: str, 
         question: str, 
-        mode: str
+        mode: str,
+        class_level: int = 6
     ) -> str:
         """
         Generate explanation using Gemini based on RAG context and mode.
@@ -57,13 +58,14 @@ class GeminiService:
             context: RAG-retrieved context chunks
             question: Student's highlighted text/question
             mode: Explanation mode (simple/meaning/story/example/summary)
+            class_level: Student's class level (5-10)
         
         Returns:
             Formatted explanation string
         """
         try:
-            # Build mode-specific prompt
-            prompt = self._build_prompt(context, question, mode)
+            # Build mode-specific prompt with class level
+            prompt = self._build_prompt(context, question, mode, class_level)
             
             # Generate response
             response = self.chat_model.generate_content(prompt)
@@ -74,17 +76,33 @@ class GeminiService:
             logger.error(f"❌ Gemini explanation failed: {e}")
             raise
     
-    def _build_prompt(self, context: str, question: str, mode: str) -> str:
-        """Build strict prompt based on mode to prevent hallucination."""
+    def _build_prompt(self, context: str, question: str, mode: str, class_level: int = 6) -> str:
+        """Build prompt based on mode and class level to generate helpful answers."""
         
-        base_instruction = f"""You are an AI tutor for NCERT students (Classes 5-10).
+        # Class-level specific language instructions
+        language_complexity = {
+            5: "Use VERY SIMPLE words. Short sentences (5-7 words). Like talking to a 10-year-old. Use everyday examples.",
+            6: "Use simple, clear language. Short sentences. Explain like to a 11-year-old. Use relatable examples.",
+            7: "Use clear language. Medium sentences. Explain like to a 12-year-old. Use school-level examples.",
+            8: "Use standard language. Can use some technical terms but explain them. Like talking to a 13-year-old.",
+            9: "Use proper academic language. Can use technical terms with brief explanations. Like talking to a 14-year-old.",
+            10: "Use academic language. Technical terms are okay. Detailed explanations. Like talking to a 15-year-old preparing for board exams."
+        }
+        
+        language_instruction = language_complexity.get(class_level, language_complexity[6])
+        
+        base_instruction = f"""You are an AI tutor for NCERT Class {class_level} students.
 
-STRICT RULES:
-1. ONLY use the context provided below. DO NOT add external information.
-2. If the context doesn't contain the answer, say "I don't have enough information in the provided text."
-3. Keep language appropriate for the student's class level.
+CRITICAL RULES - STRICT RAG (Retrieval-Augmented Generation):
+1. ⚠️ ONLY use information from the CONTEXT below - DO NOT use your general knowledge
+2. ⚠️ If the context doesn't have the answer, say: "I couldn't find this information in your textbook."
+3. ⚠️ DO NOT make up facts, dates, names, or examples that aren't in the context
+4. ⚠️ If you're unsure, say so - don't guess or hallucinate
 
-CONTEXT:
+LANGUAGE LEVEL (Class {class_level}):
+{language_instruction}
+
+CONTEXT FROM TEXTBOOK:
 {context}
 
 STUDENT'S QUESTION:
@@ -92,39 +110,42 @@ STUDENT'S QUESTION:
 """
         
         mode_instructions = {
-            "simple": """
-MODE: SIMPLE EXPLANATION
-- Explain in the simplest possible terms
-- Use short sentences
-- Avoid complex vocabulary
-- Make it easy to understand for a beginner
+            "simple": f"""
+MODE: SIMPLE EXPLANATION (Class {class_level})
+- Break down complex ideas into simple parts
+- Use analogies and comparisons from daily life
+- Explain step-by-step if needed
+- Language level: {language_complexity.get(class_level, "simple and clear")}
 """,
-            "meaning": """
-MODE: MEANING/DEFINITION
-- Provide clear definitions of key terms
-- Explain what each concept means
-- Include examples if present in context
+            "meaning": f"""
+MODE: MEANING/DEFINITION (Class {class_level})
+- Define key terms in simple words
+- Give the meaning from the textbook context
+- Use examples from the context if available
+- Language level: {language_complexity.get(class_level, "simple and clear")}
 """,
-            "story": """
-MODE: STORY FORMAT
-- Present the information as a narrative
-- Make it engaging and memorable
-- Use storytelling techniques while staying factual
-- Only use facts from the context
+            "story": f"""
+MODE: STORY FORMAT (Class {class_level})
+- Tell it like a story using ONLY facts from the context
+- Make it interesting and memorable
+- Use characters/events from the textbook
+- Keep it factual - no made-up stories
+- Language level: {language_complexity.get(class_level, "simple and clear")}
 """,
-            "example": """
-MODE: EXAMPLES
-- Provide practical, real-world examples
-- If examples are in context, use them
-- If not, clearly state: "The text doesn't provide specific examples"
-- Make examples relatable to students
+            "example": f"""
+MODE: EXAMPLES (Class {class_level})
+- Give examples that are in the context/textbook
+- If no examples in context, explain clearly: "The textbook doesn't give specific examples for this"
+- Relate to student's real-life if possible (but only based on context info)
+- Language level: {language_complexity.get(class_level, "simple and clear")}
 """,
-            "summary": """
-MODE: SUMMARY
-- Provide a concise summary
-- Cover all key points from the context
-- Use bullet points if appropriate
-- Keep it brief and focused
+            "summary": f"""
+MODE: SUMMARY (Class {class_level})
+- Summarize the key points from the context
+- Use bullet points or short paragraphs
+- Cover main ideas only
+- Keep it concise
+- Language level: {language_complexity.get(class_level, "simple and clear")}
 """
         }
         
@@ -269,6 +290,24 @@ Provide evaluation in JSON format:"""
         
         except Exception as e:
             logger.error(f"❌ Assessment evaluation failed: {e}")
+            raise
+    
+    def generate_response(self, prompt: str) -> str:
+        """
+        Generate a generic response from Gemini for any given prompt.
+        
+        Args:
+            prompt: The input prompt text
+        
+        Returns:
+            Generated response text
+        """
+        try:
+            response = self.chat_model.generate_content(prompt)
+            return response.text
+        
+        except Exception as e:
+            logger.error(f"❌ Gemini response generation failed: {e}")
             raise
 
 

@@ -124,7 +124,7 @@ export default function NotesPanel({
           {/* Helper Text */}
           <div className="rounded-lg bg-muted/50 p-3">
             <p className="text-xs text-muted-foreground">
-              💡 Your note will be highlighted in{" "}
+              Note: Your note will be highlighted in{" "}
               <span className="font-semibold text-green-600">green</span> on the
               PDF. Click on any highlight to view its details.
             </p>

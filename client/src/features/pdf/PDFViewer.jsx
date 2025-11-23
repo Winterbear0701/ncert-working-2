@@ -144,10 +144,10 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
         if (nextPage > pagesCompleted) {
           setPagesCompleted(nextPage);
 
-          // Check if assessment should trigger (every 4 pages)
-          if (nextPage - lastAssessmentPage >= 4) {
+          // ✅ FIXED: Trigger assessment AFTER clicking Next on page 4 (when moving to page 5)
+          if (prev === 4 && nextPage === 5 && !showAssessment) {
             setTimeout(() => setShowAssessment(true), 500);
-            setLastAssessmentPage(nextPage);
+            setLastAssessmentPage(4);
           }
         }
         return nextPage;
