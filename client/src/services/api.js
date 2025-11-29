@@ -60,6 +60,46 @@ export const chatService = {
  */
 export const assessmentService = {
   /**
+   * Get enhanced assessment questions (15 questions for 10-page interval)
+   * Uses cached questions from MongoDB if available
+   * @param {number} classLevel - User's class level
+   * @param {string} subject - Subject name
+   * @param {number} chapter - Chapter number
+   * @param {string} lessonName - Lesson/chapter name
+   * @param {string} pageRange - Page range (e.g., "1-10")
+   * @param {string} studentId - Student ID
+  * @returns {Promise<{questions: Array<{question:string,type:string,difficulty:string,expected_keywords?:string[],page_range?:string}>, cached: boolean}>}
+   */
+  async getEnhancedQuestions(classLevel, subject, chapter, lessonName, pageRange, studentId) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/assessment/questions/enhanced`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          class_level: classLevel,
+          subject: subject,
+          chapter: chapter,
+          lesson_name: lessonName,
+          page_range: pageRange,
+          student_id: studentId,
+          force_regenerate: false,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Enhanced Questions API Error: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Enhanced Questions API Error:", error);
+      throw error;
+    }
+  },
+
+  /**
    * Get assessment questions from textbook content (RAG-based)
    * @param {number} classLevel - User's class level (5-10)
    * @param {string} subject - Subject name

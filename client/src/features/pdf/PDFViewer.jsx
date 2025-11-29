@@ -19,6 +19,7 @@ import NotesPanel from "../annotations/NotesPanel";
 import HistoryPanel from "../annotations/HistoryPanel";
 import HighlightOverlay from "../annotations/HighlightOverlay";
 import VoiceAssessment from "../assessment/VoiceAssessment";
+import { useState as ReactUseState } from "react";
 
 /**
  * PDF Viewer Component
@@ -41,6 +42,8 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
   const [pagesCompleted, setPagesCompleted] = useState(0);
   const [showAssessment, setShowAssessment] = useState(false);
   const [lastAssessmentPage, setLastAssessmentPage] = useState(0);
+  const [showAssessmentPrompt, setShowAssessmentPrompt] = useState(false);
+  const [assessmentRange, setAssessmentRange] = useState("1-10");
   const [showAnnotations, setShowAnnotations] = useState(true);
 
   const setSelectedText = useAnnotationStore((state) => state.setSelectedText);
@@ -144,10 +147,13 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
         if (nextPage > pagesCompleted) {
           setPagesCompleted(nextPage);
 
-          // ✅ FIXED: Trigger assessment AFTER clicking Next on page 4 (when moving to page 5)
-          if (prev === 4 && nextPage === 5 && !showAssessment) {
-            setTimeout(() => setShowAssessment(true), 500);
-            setLastAssessmentPage(4);
+          // ✅ Change: Show a prompt after completing each 10 pages (10, 20, 30, ...)
+          if (prev % 10 === 0 && prev !== 0 && prev !== lastAssessmentPage) {
+            const start = prev - 9;
+            const end = prev;
+            setAssessmentRange(`${start}-${end}`);
+            setShowAssessmentPrompt(true); // non-blocking notification
+            setLastAssessmentPage(prev);
           }
         }
         return nextPage;
@@ -191,15 +197,37 @@ export default function PDFViewer({ pdfUrl, currentLesson }) {
     setShowAssessment(false);
   };
 
+  const startAssessmentNow = () => {
+    setShowAssessmentPrompt(false);
+    setShowAssessment(true);
+  };
+
+  const dismissAssessmentPrompt = () => setShowAssessmentPrompt(false);
+
   return (
     <div className="flex flex-col h-full relative ">
       {/* Voice Assessment Modal */}
       {showAssessment && (
         <VoiceAssessment
-          lessonId={currentLesson?.id}
+          currentLesson={currentLesson}
+          pageRange={assessmentRange}
           onComplete={handleAssessmentComplete}
           onClose={handleAssessmentClose}
         />
+      )}
+
+      {/* 10-page completion prompt */}
+      {showAssessmentPrompt && (
+        <div className="fixed bottom-4 right-4 z-40 max-w-sm w-full bg-card border rounded-lg shadow-lg p-4">
+          <div className="text-sm font-medium mb-1">Completed {assessmentRange} pages</div>
+          <div className="text-xs text-muted-foreground mb-3">
+            You can attend a quick test for these pages now.
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" size="sm" onClick={dismissAssessmentPrompt}>Later</Button>
+            <Button size="sm" onClick={startAssessmentNow}>Start Test</Button>
+          </div>
+        </div>
       )}
 
       {/* Selection Dialog */}

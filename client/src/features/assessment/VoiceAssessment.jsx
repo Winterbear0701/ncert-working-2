@@ -24,7 +24,7 @@ import useUserStore from "../../stores/userStore";
  * - SpeechSynthesis: For voice output (questions)
  */
 
-export default function VoiceAssessment({ currentLesson, onComplete, onClose }) {
+export default function VoiceAssessment({ currentLesson, pageRange = "1-10", onComplete, onClose }) {
   const [isListening, setIsListening] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState([]);
@@ -48,25 +48,47 @@ export default function VoiceAssessment({ currentLesson, onComplete, onClose }) 
         setIsLoadingQuestions(true);
         setError(null);
         
-        console.log("📝 Loading assessment questions from backend...");
-        const response = await assessmentService.getQuestions(
+        console.log("📝 Loading ENHANCED assessment questions (15 questions for pages 1-10)...");
+        
+        // Use provided pageRange (e.g., "1-10", "11-20")
+        const response = await assessmentService.getEnhancedQuestions(
           user.classLevel,
           user.preferredSubject || "Social Science",
           currentLesson?.number || 1,
-          3 // Number of questions
+          currentLesson?.name || "Lesson",
+          pageRange,
+          user.id || "student_" + Date.now()
         );
         
-        console.log("✅ Questions loaded:", response);
-        setQuestions(response.questions || []);
+        console.log("✅ Enhanced questions loaded:", response);
+        console.log(`   - Total: ${response.total} questions`);
+        console.log(`   - Cached: ${response.cached ? 'Yes' : 'No (newly generated)'}`);
+        console.log(`   - Times used: ${response.times_used}`);
+        
+  // Keep full question objects to show keywords later if needed
+  const questionTexts = response.questions.map(q => q.question);
+  setQuestions(questionTexts);
         setIsLoadingQuestions(false);
       } catch (err) {
-        console.error("❌ Failed to load questions:", err);
+        console.error("❌ Failed to load enhanced questions:", err);
         setError("Failed to load questions. Using fallback questions.");
-        // Fallback questions
+        // Fallback to 15 questions
         setQuestions([
-          "What did you learn from this lesson?",
-          "Can you explain the main concept?",
-          "How would you apply this knowledge?",
+          "What is the main topic discussed in these pages?",
+          "Explain one important concept you learned.",
+          "Describe what you remember from the first section.",
+          "What is one key fact mentioned in the text?",
+          "How would you summarize the main idea?",
+          "Why is this topic important?",
+          "What did you find most interesting?",
+          "How does this relate to what you already know?",
+          "Explain one example from the text.",
+          "What question would you ask about this topic?",
+          "How could you use this information?",
+          "What was the most challenging part to understand?",
+          "Can you describe one detail from the lesson?",
+          "What would you like to learn more about?",
+          "How confident do you feel about this topic?",
         ]);
         setIsLoadingQuestions(false);
       }
@@ -261,6 +283,8 @@ export default function VoiceAssessment({ currentLesson, onComplete, onClose }) 
                   <p className="text-lg font-medium leading-relaxed">
                     {questions[currentQuestion]}
                   </p>
+                  {/* Optional: Show important keywords guidance if available in future */}
+                  {/* <div className="mt-3 text-xs text-muted-foreground">Keywords: ...</div> */}
                 </div>
 
                 {/* Progress Indicator */}

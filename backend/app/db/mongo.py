@@ -28,10 +28,10 @@ class MongoDB:
             
             # Test connection
             await self.client.admin.command('ping')
-            logger.info("✅ Connected to MongoDB Atlas successfully")
+            logger.info("Connected to MongoDB Atlas successfully")
             
         except Exception as e:
-            logger.error(f"❌ Failed to connect to MongoDB: {e}")
+            logger.error(f"Failed to connect to MongoDB: {e}")
             raise
     
     async def close(self):
@@ -72,15 +72,15 @@ class PineconeDB:
             
             # Test connection by getting index stats
             stats = self.index.describe_index_stats()
-            logger.info(f"✅ Connected to Pinecone successfully")
-            logger.info(f"   Index: {settings.PINECONE_INDEX}")
-            logger.info(f"   Total vectors: {stats.get('total_vector_count', 0)}")
+            logger.info(f"Connected to Pinecone successfully")
+            logger.info(f"Index: {settings.PINECONE_INDEX}")
+            logger.info(f"Total vectors: {stats.get('total_vector_count', 0)}")
             
         except Exception as e:
-            logger.error(f"❌ Failed to connect to Pinecone: {e}")
-            logger.warning("⚠️  Pinecone connection failed - RAG features will not work")
-            logger.warning("   Please check PINECONE_HOST in .env file")
-            logger.warning("   Get correct host from: https://app.pinecone.io/")
+            logger.error(f"Failed to connect to Pinecone: {e}")
+            logger.warning("Pinecone connection failed - RAG features will not work")
+            logger.warning("Please check PINECONE_HOST in .env file")
+            logger.warning("Get correct host from: https://app.pinecone.io/")
             # Don't raise - allow server to start without Pinecone
     
     def query(self, vector: list[float], top_k: int = 5, filter: dict = None):
@@ -104,7 +104,7 @@ class PineconeDB:
             )
             return results
         except Exception as e:
-            logger.error(f"❌ Pinecone query failed: {e}")
+            logger.error(f"Pinecone query failed: {e}")
             raise
     
     def upsert(self, vectors: list[tuple]):
@@ -116,9 +116,9 @@ class PineconeDB:
         """
         try:
             self.index.upsert(vectors=vectors)
-            logger.info(f"✅ Upserted {len(vectors)} vectors to Pinecone")
+            logger.info(f"Upserted {len(vectors)} vectors to Pinecone")
         except Exception as e:
-            logger.error(f"❌ Pinecone upsert failed: {e}")
+            logger.error(f"Pinecone upsert failed: {e}")
             raise
 
 
@@ -138,14 +138,14 @@ async def init_databases():
     # Connect to Pinecone
     pinecone_db.connect()
     
-    logger.info("✅ All databases initialized successfully")
+    logger.info("All databases initialized successfully")
 
 
 async def close_databases():
     """Close all database connections."""
     logger.info("Closing database connections...")
     await mongodb.close()
-    logger.info("✅ All databases closed")
+    logger.info("All databases closed")
 
 
 # ==================== HELPER FUNCTIONS ====================
@@ -168,3 +168,13 @@ def get_assessments_collection():
 def get_quiz_results_collection():
     """Get quiz results collection from MongoDB."""
     return mongodb.get_collection("quiz_results")
+
+
+def get_question_sets_collection():
+    """Get question sets collection from MongoDB."""
+    return mongodb.get_collection("question_sets")
+
+
+def get_assessment_attempts_collection():
+    """Get assessment attempts collection from MongoDB."""
+    return mongodb.get_collection("assessment_attempts")
