@@ -51,3 +51,7 @@ htmlcov/
 # OS
 Thumbs.db
 desktop.ini
+
+extracted_images
+ncert-working-dataset
+
